@@ -680,10 +680,10 @@ ${entry} - ${toggled[entry] ? "DONE" : "TODO"}`).join("\n")}
   return (
     <div>
       <textarea onChange={e => setText(e.target.value)}>
-        TEXTAREA
+        Paste here
       </textarea>
       <div>
-        <h2>List of fnds</h2>
+        <h2>List of all external functions with calls to external contracts</h2>
         {Object.keys(parsed).map(entry => 
         <div className={styles.entry} key={entry} onClick={() => handleToggle(entry)}>
           <h3 >{entry} - {toggled[entry] ? "DONE" : "TODO"}</h3>
