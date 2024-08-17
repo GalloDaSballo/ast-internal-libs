@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import parser from "@solidity-parser/parser"
 import styles from "./FunctionParser.module.css";
 import CopyToClipboardButton from "./CopyToClipboardButton";
+import { FunctionDefinition } from "@solidity-parser/parser/dist/src/ast-types";
 
 const DEFAULT_TEXT = ""
 const DEFAULT_TEXT_DEP = `
@@ -613,93 +614,134 @@ contract SwapOperations is ISwapOperations, Ownable(msg.sender), CheckContract, 
 `
 
 
-function parseText(text: string): {[key: string]: string[]} {
-  let found: {[key: string]: string[]} = {}
+export interface FunctionInput {
+  internalType: string;
+  name: string;
+  type: string; // Pretty sure we don't care about the type
+}
+
+interface FunctionAbi {
+  name: string;
+  stateMutability: "pure" | "constant" | "payable" | "view";
+  inputs: FunctionInput[];
+  outputs: FunctionOutput[];
+  visibility: "default" | "external" | "internal" | "public" | "private";
+}
+
+export interface FunctionOutput {
+  internalType: string;
+  name?: string;
+  type: string; // Pretty sure we don't care about the type
+}
+
+interface LibraryDetails {
+  name: string, functions: FunctionDefinition[]
+}
+
+
+function parseText(text: string): LibraryDetails[] {
+  let found: LibraryDetails[] = []
+
+  // We need to return abi like
+  // Function, inputs, etc...
   try {
     const ast = parser.parse(text)
     
     parser.visit(ast, {
-      FunctionDefinition: function (functionDef) {
-        if(functionDef.visibility === "public" || functionDef.visibility == "external") {
-          if(functionDef.name) {
-            found[functionDef.name] = []
-            parser.visit(functionDef, {
-              FunctionCall: function (node) {
-                
-                // TODO: How to figure out if it's external?
-                if(node?.expression?.type == "MemberAccess") {
-
-                  // This is the contract identifier, we need the function call
-                  if(node?.expression?.expression.type == "Identifier") {
-                    console.log(node)
-                    console.log(node?.expression?.expression?.name)
-                    // Name of contract being called
-                    found[functionDef.name as string].push(`${node?.expression?.expression?.name}.${node?.expression?.memberName}`)
-                  }
-
-                  // 
-                }
-                
-              },
-            })
-          }
-        }
+      ContractDefinition: function (def) {
+        const index = found.length;
+        found.push({name: def.name, functions: []})
+        parser.visit(def, {
+          FunctionDefinition: function (def) {
+            // @ts-ignore
+            found[index].functions.push(def)
+          },
+        })
       },
     })
-    
+  } catch {
 
-
-    // For each declaration grab the fns
-  } catch (e) {
-      console.error(e)
   }
 
   return found
 }
+
+export function getAbi(def: FunctionDefinition): FunctionAbi {
+  if(!def?.name) {
+    throw Error("No name")
+  }
+  if(!def?.stateMutability) {
+    throw Error("No fn visibility")
+  }
+  return {
+    name: def.name as string,
+    visibility: def.visibility,
+    stateMutability: def?.stateMutability,
+    inputs: def.parameters.map(param => ({
+      internalType: param.type,
+      name: param.name ? param.name : "",
+      // export type TypeName = ElementaryTypeName | UserDefinedTypeName | Mapping | ArrayTypeName | FunctionTypeName;
+      type: param.type
+      // type: param.typeName ? param.typeName | ""
+    })), 
+    outputs: def.returnParameters ? def.returnParameters.map(param => ({
+      internalType: param.type,
+      name: param.name ? param.name : "",
+      // export type TypeName = ElementaryTypeName | UserDefinedTypeName | Mapping | ArrayTypeName | FunctionTypeName;
+      type: param.type
+      // type: param.typeName ? param.typeName | ""
+    })) : [],  
+  }
+
+}
+
+export function getAbis(defs: FunctionDefinition[]): FunctionAbi[] {
+  return defs.map(def => getAbi(def))
+}
 export default function FunctionParser() {
   const [text, setText] = useState(DEFAULT_TEXT)
-  const [parsed, setParsed] = useState<{[key: string]: string[]}>({})
-  const [toggled, setToggled] = useState<{[key: string]: Boolean}>({})
+  const [parsed, setParsed] = useState<LibraryDetails[]>([])
   
   useEffect(() => {
     setParsed(parseText(text)) // TODO
   }, [text])
 
-  function handleToggle(entry: string): void {
-    const toggledCopy = structuredClone(toggled)
-    toggledCopy[entry] = !toggled[entry]
-    setToggled(toggledCopy)
-  }
 
-  function makeText(parsed: {[key: string]: string[]}, toggled: {[key: string]: Boolean}): string {
+  // TODO Make Recon Boilerplate
+  function makeText(parsed: LibraryDetails[]): string {
     return `
       ${Object.keys(parsed).map(entry => `
-${entry} - ${toggled[entry] ? "DONE" : "TODO"}`).join("\n")}
+${entry}`).join("\n")}
 `
   }
   return (
     <div>
       <div>
-      <textarea onChange={e => setText(e.target.value)}>
-        Paste here
+      <textarea defaultValue="Paste here" onChange={e => setText(e.target.value)}>
+       
       </textarea>
       </div>
       <div>
-      <CopyToClipboardButton text={makeText(parsed, toggled)} />
+      <CopyToClipboardButton text={makeText(parsed)} />
       </div>
       <div>
         <h2>List of all external functions with calls to external contracts</h2>
-        {Object.keys(parsed).map(entry => 
-        <div className={styles.entry} key={entry} onClick={() => handleToggle(entry)}>
-          <h3 >{entry} - {toggled[entry] ? "DONE" : "TODO"}</h3>
+        {(parsed).map(entry => 
+        <div className={styles.entry} key={entry.name}>
+          <h3 >{entry.name}</h3>
           <div className={styles.subEntries}>
-            {parsed[entry].map(call => <li key={call}>{call}</li>)}
+            {entry.functions.map(fn => <li key={fn.name}>{fn.name}</li>)}
           </div>
         </div>
         )}
       </div>
 
-      <CopyToClipboardButton text={makeText(parsed, toggled)} />
+      <div>
+
+        {JSON.stringify(getAbis(parsed[0]?.functions || []))}
+      </div>
+
+      <CopyToClipboardButton text={makeText(parsed)} />
 
     </div>
   );
