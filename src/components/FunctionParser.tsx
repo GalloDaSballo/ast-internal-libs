@@ -682,6 +682,7 @@ ${entry} - ${toggled[entry] ? "DONE" : "TODO"}`).join("\n")}
       <textarea onChange={e => setText(e.target.value)}>
         Paste here
       </textarea>
+      <CopyToClipboardButton text={makeText(parsed, toggled)} />
       <div>
         <h2>List of all external functions with calls to external contracts</h2>
         {Object.keys(parsed).map(entry => 
