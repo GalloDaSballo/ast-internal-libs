@@ -613,6 +613,8 @@ contract SwapOperations is ISwapOperations, Ownable(msg.sender), CheckContract, 
 }
 `
 
+/// type location name
+
 
 export interface FunctionInput {
   internalType: string;
@@ -674,21 +676,26 @@ export function getAbi(def: FunctionDefinition): FunctionAbi {
     throw Error("No fn visibility")
   }
   return {
+    // https://github.com/aave/protocol-v2/blob/master/contracts/protocol/libraries/configuration/ReserveConfiguration.sol
+    // IMO for location we need custom ABI format
     name: def.name as string,
     visibility: def.visibility,
     stateMutability: def?.stateMutability,
     inputs: def.parameters.map(param => ({
-      internalType: param.type,
+      // @ts-ignore | Some types have name and not namePath
+      internalType: "NOT IMPLEMENTED",
       name: param.name ? param.name : "",
       // export type TypeName = ElementaryTypeName | UserDefinedTypeName | Mapping | ArrayTypeName | FunctionTypeName;
-      type: param.type
+      // @ts-ignore | Some types have name and not namePath
+      type: param.typeName.name ? param.typeName?.name : param.typeName?.namePath
       // type: param.typeName ? param.typeName | ""
     })), 
     outputs: def.returnParameters ? def.returnParameters.map(param => ({
-      internalType: param.type,
+      // @ts-ignore | Some types have name and not namePath
+      internalType: "NOT IMPLEMENTED",
       name: param.name ? param.name : "",
-      // export type TypeName = ElementaryTypeName | UserDefinedTypeName | Mapping | ArrayTypeName | FunctionTypeName;
-      type: param.type
+      // @ts-ignore | Some types have name and not namePath
+      type: param.typeName.name ? param.typeName?.name : param.typeName?.namePath
       // type: param.typeName ? param.typeName | ""
     })) : [],  
   }
@@ -728,17 +735,15 @@ ${entry}`).join("\n")}
         <h2>List of all external functions with calls to external contracts</h2>
         {(parsed).map(entry => 
         <div className={styles.entry} key={entry.name}>
-          <h3 >{entry.name}</h3>
-          <div className={styles.subEntries}>
-            {entry.functions.map(fn => <li key={fn.name}>{fn.name}</li>)}
-          </div>
+          <h3 >Library: {entry.name}</h3>
         </div>
         )}
       </div>
 
       <div>
-
-        {JSON.stringify(getAbis(parsed[0]?.functions || []))}
+        {parsed.map(entry => 
+          JSON.stringify(getAbis(entry?.functions || []))
+        )}
       </div>
 
       <CopyToClipboardButton text={makeText(parsed)} />
